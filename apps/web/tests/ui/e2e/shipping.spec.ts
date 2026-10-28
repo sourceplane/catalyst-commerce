@@ -1,0 +1,170 @@
+import { faker } from '@faker-js/faker';
+
+import { expect, Page, test } from '~/tests/fixtures';
+import { CatalogFixture } from '~/tests/fixtures/catalog';
+import { getTranslations } from '~/tests/lib/i18n';
+
+// Every assertion in these tests waits on a cart server action that calls BigCommerce's checkout
+// API. It normally answers in about a second but can stall for several, past the 5s default.
+const expectAfterAction = expect.configure({ timeout: 15_000 });
+
+async function addProductAndGoToCart(page: Page, catalog: CatalogFixture) {
+  const t = await getTranslations();
+  const product = await catalog.getDefaultOrCreateSimpleProduct();
+
+  await page.goto(product.path);
+  await page.getByRole('button', { name: t('Product.ProductDetails.Submit.addToCart') }).click();
+  // The success toast auto-dismisses after ~4s, so asserting on it is racy.
+  // Wait for the add-to-cart action to settle and verify state via the /cart page instead.
+  await page.waitForLoadState('networkidle');
+
+  await page.goto('/cart');
+  await expect(page.getByRole('heading', { name: t('Cart.title') })).toBeVisible();
+  // The shipping form toggles client-side, so wait for hydration before interacting.
+  await page.waitForLoadState('networkidle');
+}
+
+async function fillOutShippingForm(page: Page) {
+  const t = await getTranslations('Cart.CheckoutSummary.Shipping');
+
+  await page.getByLabel(t('country')).click();
+  await page.getByRole('option').first().click();
+  await page.getByLabel(t('city')).fill(faker.location.city());
+  await page.getByLabel(t('state')).click();
+
+  const states = await page.getByRole('option').allTextContents();
+
+  if (states.length >= 1) {
+    // Click a random state
+    const randomIndex = Math.floor(Math.random() * states.length);
+
+    await page.getByRole('option').nth(randomIndex).click();
+  } else {
+    await page.keyboard.press('Escape');
+  }
+
+  await page.getByLabel(t('postalCode')).click();
+  await page.getByLabel(t('postalCode')).fill(faker.location.zipCode('#####'));
+}
+
+async function selectRandomShippingOption(page: Page): Promise<string> {
+  const shippingOptions = await page.getByRole('radio').all();
+
+  let selectedOption = '';
+
+  if (shippingOptions.length >= 1) {
+    // Click a random state
+    const randomIndex = Math.floor(Math.random() * shippingOptions.length);
+    const shippingOption = shippingOptions[randomIndex];
+
+    selectedOption =
+      (await shippingOption?.locator('~ label > span[id*="label"]').innerText()) ?? '';
+
+    await shippingOption?.click();
+  }
+
+  return selectedOption;
+}
+
+test('Add shipping estimates', async ({ page, catalog }) => {
+  const t = await getTranslations('Cart.CheckoutSummary.Shipping');
+
+  await addProductAndGoToCart(page, catalog);
+
+  await page.getByRole('button', { name: t('add'), exact: true }).click();
+
+  await fillOutShippingForm(page);
+
+  await page.getByRole('button', { name: t('viewShippingOptions') }).click();
+  await expectAfterAction(page.getByLabel(t('shippingOptions'))).toBeVisible();
+
+  const selectedOption = await selectRandomShippingOption(page);
+
+  await page.getByRole('button', { name: t('addShipping') }).click();
+  await expectAfterAction(page.getByText(`${selectedOption}${t('change')}`)).toBeVisible();
+});
+
+test('Update shipping estimates', async ({ page, catalog }) => {
+  const t = await getTranslations('Cart.CheckoutSummary.Shipping');
+
+  await addProductAndGoToCart(page, catalog);
+
+  await page.getByRole('button', { name: t('add'), exact: true }).click();
+
+  await fillOutShippingForm(page);
+
+  await page.getByRole('button', { name: t('viewShippingOptions') }).click();
+  await expectAfterAction(page.getByLabel(t('shippingOptions'))).toBeVisible();
+
+  let selectedOption = await selectRandomShippingOption(page);
+
+  await page.getByRole('button', { name: t('addShipping') }).click();
+  await expectAfterAction(page.getByText(`${selectedOption}${t('change')}`)).toBeVisible();
+
+  await page.getByText(t('change')).click();
+  await page.getByRole('button', { name: t('editAddress') }).click();
+
+  await fillOutShippingForm(page);
+
+  await page.getByRole('button', { name: t('updatedShippingOptions') }).click();
+  await expectAfterAction(
+    page.getByRole('button', { name: t('updatedShippingOptions') }),
+  ).toBeHidden();
+
+  const shippingOptions = page.getByLabel(t('shippingOptions'));
+  const shippingSummary = page.getByText(`${selectedOption}${t('change')}`);
+
+  await expectAfterAction(shippingOptions.or(shippingSummary).first()).toBeVisible();
+
+  if (await shippingOptions.isVisible()) {
+    selectedOption = await selectRandomShippingOption(page);
+
+    // The form says "Update shipping" only while an option is still selected. BigCommerce drops it
+    // when it doesn't apply to the new address.
+    await page
+      .getByRole('button', { name: t('updateShipping'), exact: true })
+      .or(page.getByRole('button', { name: t('addShipping'), exact: true }))
+      .click();
+  }
+
+  await expectAfterAction(page.getByText(`${selectedOption}${t('change')}`)).toBeVisible();
+});
+
+test('Updating cart quantity with a shipping estimate opens the shipping options for a new quote', async ({
+  page,
+  catalog,
+}) => {
+  const t = await getTranslations('Cart');
+
+  await addProductAndGoToCart(page, catalog);
+
+  await page.getByRole('button', { name: t('CheckoutSummary.Shipping.add'), exact: true }).click();
+
+  await fillOutShippingForm(page);
+
+  await page
+    .getByRole('button', { name: t('CheckoutSummary.Shipping.viewShippingOptions') })
+    .click();
+  await expectAfterAction(
+    page.getByLabel(t('CheckoutSummary.Shipping.shippingOptions')),
+  ).toBeVisible();
+
+  let selectedOption = await selectRandomShippingOption(page);
+
+  await page.getByRole('button', { name: t('CheckoutSummary.Shipping.addShipping') }).click();
+  await expectAfterAction(
+    page.getByText(`${selectedOption}${t('CheckoutSummary.Shipping.change')}`),
+  ).toBeVisible();
+
+  await page.getByLabel(t('increment')).click();
+  await expectAfterAction(
+    page.getByLabel(t('CheckoutSummary.Shipping.shippingOptions')),
+  ).toBeVisible();
+
+  selectedOption = await selectRandomShippingOption(page);
+
+  await page.getByRole('button', { name: t('CheckoutSummary.Shipping.addShipping') }).click();
+  await expectAfterAction(
+    page.getByText(`${selectedOption}${t('CheckoutSummary.Shipping.change')}`),
+  ).toBeVisible();
+});

@@ -1,0 +1,137 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: web
+  description: The Catalyst storefront for BigCommerce (Next.js on Cloudflare Workers + Static Assets via @opennextjs/cloudflare, per environment; R2 + Durable Objects as the Next.js cache, KV for route lookups; a "connect your BigCommerce store" page until a store is connected)
+spec:
+  type: cloudflare-workers-assets-turbo
+  lifecycle: production
+  owner: platform
+  # Its pages, attached to it in the workspace's catalog: what the Docs
+  # library shows for it, and what the catalog's docs and runbook checks read.
+  # Generated from what this manifest and its sources declare.
+  docs:
+    overview: docs/overview.md
+    pages:
+      - { path: docs/architecture.md, role: architecture, title: Architecture }
+      - { path: docs/runbook.md, role: runbook, title: Runbook }
+  # `app`, not `web`: a domain and a component share one name space in the
+  # catalog, and a domain called `web` hid this component from it.
+  domain: app
+  path: apps/web
+  # Its own lane per environment: the Next.js build is the longest job in the
+  # plan, and a shared lane would wait on it.
+  lane: isolated
+  # INFRA BEFORE APP. The R2 bucket is the Worker's incremental cache and the
+  # KV namespace its route cache (and where it keeps the auth key it
+  # generates), both bound by id or name, rendered into its config during the
+  # build from the wiring documents the cloudflare-r2 and cloudflare-kv roots
+  # lease-publish after their applies. A job resolves its secrets when it
+  # STARTS, so on a merge to main this deploy waits for that environment's
+  # applies (enforced) and the documents are there; a pull request deploys
+  # nothing, so nothing on one waits (advisory). The Durable Objects (tag
+  # cache, revalidation queue) need no root — the Worker exports their
+  # classes and the migration creates them on deploy.
+  dependsOn:
+    - component: cloudflare-r2
+      mode: enforced
+      modeRules:
+        - mode: advisory
+          when:
+            triggerRef: github-pull-request
+    - component: cloudflare-kv
+      mode: enforced
+      modeRules:
+        - mode: advisory
+          when:
+            triggerRef: github-pull-request
+  secretEnv:
+    WIRING_CLOUDFLARE_R2_STAGE: "secret://catalyst-commerce/catalyst-commerce/stage/WIRING_CLOUDFLARE_R2"
+    WIRING_CLOUDFLARE_R2_PROD: "secret://catalyst-commerce/catalyst-commerce/prod/WIRING_CLOUDFLARE_R2"
+    WIRING_CLOUDFLARE_KV_STAGE: "secret://catalyst-commerce/catalyst-commerce/stage/WIRING_CLOUDFLARE_KV"
+    WIRING_CLOUDFLARE_KV_PROD: "secret://catalyst-commerce/catalyst-commerce/prod/WIRING_CLOUDFLARE_KV"
+  # The store, connected after the build by its owner, per environment: its
+  # hash, a storefront token (its control panel's API account, scoped to the
+  # Storefront API), and the channel to sell in (1, the store's default, when
+  # absent). The build reads the store's settings with them (its site,
+  # checkout and CDN URLs, its robots.txt and sitemap), and the Worker reads
+  # them on every request, so the deploy sets them as Worker secrets too
+  # (tooling/wire/worker-secrets.mjs). When absent — every fresh product —
+  # the storefront builds without calling BigCommerce and says "Connect your
+  # BigCommerce store" (lib/bigcommerce-connection.ts). AUTH_SECRET is the
+  # owner's own signing key for sessions; without it the Worker generates one
+  # (lib/auth-secret.ts).
+  optionalSecretEnv:
+    BIGCOMMERCE_STORE_HASH: "secret://catalyst-commerce/catalyst-commerce/{{ .environment }}/BIGCOMMERCE_STORE_HASH"
+    BIGCOMMERCE_STOREFRONT_TOKEN: "secret://catalyst-commerce/catalyst-commerce/{{ .environment }}/BIGCOMMERCE_STOREFRONT_TOKEN"
+    BIGCOMMERCE_CHANNEL_ID: "secret://catalyst-commerce/catalyst-commerce/{{ .environment }}/BIGCOMMERCE_CHANNEL_ID"
+    AUTH_SECRET: "secret://catalyst-commerce/catalyst-commerce/{{ .environment }}/AUTH_SECRET"
+  subscribe:
+    environments:
+      - name: dev
+        profile: verify
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
+      - name: prod
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
+  parameters:
+    nodeVersion: "22"
+    pnpmVersion: "10.12.1"
+
+    workspaceDir: ../..
+    appDir: .
+
+    turboFilter: "@app/web"
+    wranglerConfig: wrangler.jsonc
+
+    # @opennextjs/cloudflare emits a Worker entrypoint plus a static-assets
+    # directory bound via ASSETS — both deploy in one `wrangler deploy`.
+    workerEntrypoint: .open-next/worker.js
+    assetsDir: .open-next/assets
+
+    # Per-env worker name: catalyst-commerce-web-{dev,stage,prod}. The rendered
+    # wrangler.jsonc names the same Worker (its self-reference binding needs it).
+    workerName: catalyst-commerce-web
+    environmentAwareWorkerName: true
+
+    # The account's workers.dev subdomain; exported to the smoke step as
+    # ${WORKERS_DEV_SUBDOMAIN} and used to build ${DEPLOYED_URL}.
+    workersDevSubdomain: your-workers-subdomain
+
+    installCommand: pnpm install --frozen-lockfile
+    # Render this environment's wrangler config, then build, then hand the
+    # store's settings to the Worker. stage and prod render from the wiring
+    # documents their cloudflare-r2 and cloudflare-kv applies published
+    # (secretEnv above, resolved before the job's first step); dev, which no
+    # root applies to and which only verifies, renders from the committed
+    # fixture. The committed wrangler.jsonc (the fixture render) is what the
+    # composition's verify-app-structure step finds before this runs. The
+    # build is for this environment's origin: NEXTAUTH_URL (robots.txt's
+    # sitemap line) is the environment's SITE_URL (intent.yaml), else its
+    # workers.dev URL. The store's settings, when the owner has set them,
+    # become Worker secrets (`wrangler secret bulk`, values over stdin); only
+    # the deploy lane holds a Cloudflare credential, so a verify lane builds
+    # the same and pushes nothing.
+    buildCommand: node ../../tooling/wire/live.mjs --template wrangler.template.jsonc --out wrangler.jsonc --components cloudflare-r2,cloudflare-kv --env "${ORUN_ENVIRONMENT}" --fixture wiring.fixture.json --fixture-envs dev && NEXTAUTH_URL="${SITE_URL:-https://catalyst-commerce-web-${ORUN_ENVIRONMENT}.your-workers-subdomain.workers.dev}" pnpm exec turbo run build --filter=@app/web && node ../../tooling/wire/worker-secrets.mjs --secret BIGCOMMERCE_STORE_HASH --secret BIGCOMMERCE_STOREFRONT_TOKEN --secret BIGCOMMERCE_CHANNEL_ID --secret AUTH_SECRET --worker "catalyst-commerce-web-${ORUN_ENVIRONMENT}" --config wrangler.jsonc
+
+    # Smoke: the storefront answers (`/` is the store's home, or before a
+    # store is connected the page that says how to connect one), and the
+    # Worker itself answers /api/health, which no static file can. Not the
+    # store's name: that is the owner's, and HTML-escaped when it carries an
+    # `&` or `'`. Not a product either: before a store is connected there is
+    # none, and a connected store may be empty. Buffered before grep so an
+    # early match cannot SIGPIPE curl.
+    smokeCommand: 'curl -sfL -o /dev/null "${DEPLOYED_URL}/" && health=$(curl -sf "${DEPLOYED_URL}/api/health") && echo "${health}" | grep -q "\"ok\":true"'
+  labels:
+    team: platform
+    layer: delivery
+    surface: web
+    runtime: cloudflare
