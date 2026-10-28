@@ -1,0 +1,26 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tests/*"
+  - "tooling/*"
+
+# pnpm 10 blocks dependency build scripts unless allow-listed; wrangler's
+# workerd and esbuild need theirs to verify their platform binaries, and the
+# storefront's own list (upstream's pnpm-workspace.yaml) adds the rest.
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - "@swc/core"
+  - esbuild
+  - protobufjs
+  - sharp
+  - workerd
+
+# The storefront's ESLint 8 config (packages/eslint-config-catalyst) loads
+# its plugins by name from the workspace root, as upstream hoists them.
+publicHoistPattern:
+  - "@bigcommerce/eslint-*"
+  - "@next/eslint-*"
+  - "@stylistic/eslint-*"
+  - "@typescript-eslint/*"
+  - eslint-config-*
+  - eslint-plugin-*
