@@ -4,7 +4,12 @@
 |---|---|---|
 | CA0 — the spec | ✅ | CA-1 |
 | CA1 — the storefront on Workers | ✅ | CA-2 |
-| CA2 — a baseline | planned | CA-3 |
+| CA2 — a baseline | ✅ | CA-3, tagged `baseline-v1` |
+
+Proven offline in Baseline CI (every tier); not yet live (CA-A). Upstream:
+bigcommerce/catalyst at `6faa4b5` (`@bigcommerce/catalyst-core` 1.13.1,
+MIT): `core/` → `apps/web`, `packages/client` and
+`packages/eslint-config-catalyst` → `packages/`.
 
 ## Departures from the upstream template
 

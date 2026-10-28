@@ -9,7 +9,7 @@ and prod in one landing.
 
 | | |
 |---|---|
-| Status | In progress — CA1 on main: the site runs on Workers |
+| Status | ✅ Shipped (`baseline-v1`) — proven offline in Baseline CI; not yet live (risk CA-A) |
 | Upstream | [bigcommerce/catalyst](https://github.com/bigcommerce/catalyst) (`@bigcommerce/catalyst-core` 1.13.1, MIT), at `6faa4b5` (2026-10-27) |
 | Reference | [commerce](https://github.com/sourceplane/commerce) — the same OpenNext, R2 and Durable Object shape for a storefront on a hosted commerce API; [kv-redis-starter](https://github.com/sourceplane/kv-redis-starter) for the KV root |
 | Key | `CA` |

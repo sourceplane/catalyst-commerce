@@ -9,7 +9,7 @@ metadata:
 spec:
   title: "BigCommerce's Catalyst storefront on Cloudflare Workers"
   summary: "BigCommerce's Catalyst (Vercel's Catalyst by BigCommerce) — home, categories, brands, faceted search, product pages, a cart, BigCommerce's checkout, accounts, wish lists, a blog — runs as one Cloudflare Worker with Static Assets, its BigCommerce reads in Next's data cache in R2 with the tag cache and revalidation queue in Durable Objects and its route lookups in KV, live before a store is connected, and becomes an Orun baseline that takes a new storefront from nothing to live on stage and prod in one landing."
-  state: started
+  state: completed
   milestones:
     - name: "CA0 — the spec"
       exitCriteria:
