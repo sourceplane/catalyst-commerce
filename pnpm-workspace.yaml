@@ -24,3 +24,10 @@ publicHoistPattern:
   - "@typescript-eslint/*"
   - eslint-config-*
   - eslint-plugin-*
+
+# The storefront's lint config (@bigcommerce/eslint-config 2.11) is written
+# against typescript-eslint 8.28, the version upstream's lockfile holds; a
+# newer one brings rules its sources were never linted with.
+overrides:
+  "@typescript-eslint/eslint-plugin": 8.28.0
+  "@typescript-eslint/parser": 8.28.0

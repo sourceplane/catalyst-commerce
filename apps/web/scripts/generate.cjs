@@ -1,0 +1,85 @@
+// @ts-check
+const clientPackage = require('@bigcommerce/catalyst-client/package.json');
+const { generateSchema, generateOutput } = require('@gql.tada/cli-utils');
+const { join } = require('path');
+
+const corePackage = require('../package.json');
+
+const graphqlApiDomain = process.env.BIGCOMMERCE_GRAPHQL_API_DOMAIN ?? 'mybigcommerce.com';
+
+const getStoreHash = () => {
+  const storeHash = process.env.BIGCOMMERCE_STORE_HASH;
+
+  if (!storeHash) {
+    throw new Error('Missing store hash');
+  }
+
+  return storeHash;
+};
+
+const getChannelId = () => {
+  const channelId = process.env.BIGCOMMERCE_CHANNEL_ID;
+
+  return channelId;
+};
+
+const getToken = () => {
+  const token = process.env.BIGCOMMERCE_STOREFRONT_TOKEN;
+
+  if (!token) {
+    throw new Error('Missing storefront token');
+  }
+
+  return token;
+};
+
+const getEndpoint = () => {
+  const storeHash = getStoreHash();
+  const channelId = getChannelId();
+
+  // Not all sites have the channel-specific canonical URL backfilled.
+  // Wait till MSF-2643 is resolved before removing and simplifying the endpoint logic.
+  if (!channelId || channelId === '1') {
+    return `https://store-${storeHash}.${graphqlApiDomain}/graphql`;
+  }
+
+  return `https://store-${storeHash}-${channelId}.${graphqlApiDomain}/graphql`;
+};
+
+// Mirrors the runtime client's User-Agent.
+const getUserAgent = () => {
+  const catalystVersion = corePackage.catalyst?.version ?? corePackage.version;
+
+  return `${clientPackage.name}/${clientPackage.version} (schema-generation; node ${process.version}) ${corePackage.name}/${catalystVersion}`;
+};
+
+// The schema is committed (bigcommerce.graphql: BigCommerce's published
+// Storefront schema, from bigcommerce/checkout-sdk-js), so the types, the
+// build and the tests need no store. `--schema-from-store` (the
+// `generate:schema` script) refreshes it from the connected store's own API.
+const fromStore = process.argv.includes('--schema-from-store');
+
+const generate = async () => {
+  try {
+    if (fromStore) {
+      await generateSchema({
+        input: getEndpoint(),
+        headers: { Authorization: `Bearer ${getToken()}`, 'User-Agent': getUserAgent() },
+        output: join(__dirname, '../bigcommerce.graphql'),
+        tsconfig: undefined,
+      });
+    }
+
+    await generateOutput({
+      disablePreprocessing: false,
+      output: undefined,
+      tsconfig: undefined,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(error);
+    process.exit(1);
+  }
+};
+
+generate();

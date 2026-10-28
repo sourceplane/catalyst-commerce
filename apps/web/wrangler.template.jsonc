@@ -1,0 +1,76 @@
+// The source of wrangler.jsonc, which tooling/wire renders from it: from
+// wiring.fixture.json for local work (`pnpm run wire:fixture`, committed as
+// that render), and on every Orun lane from the wiring documents the
+// `cloudflare-r2` and `cloudflare-kv` Terraform roots lease-publish
+// (WIRING_CLOUDFLARE_R2_<ENV>, WIRING_CLOUDFLARE_KV_<ENV>) — dev, which no
+// root applies to, from the fixture (component.yaml's buildCommand). Edit
+// this file, never wrangler.jsonc. The workers-assets composition deploys one
+// environment per job with no wrangler `--env`, so `__ENV__` names the
+// environment this config is rendered for. The Worker's name carries it
+// (catalyst-commerce-web-stage, catalyst-commerce-web-prod — the composition's
+// `workerName` + environment) because the self-reference service binding
+// below must name exactly the Worker it runs in.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "catalyst-commerce-web-__ENV__",
+  // OpenNext's Worker, wrapped to hand Auth.js its signing key (worker.ts).
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "observability": { "enabled": true },
+  // Auth.js takes each request's own host for its URLs (Vercel sets this for
+  // it). The store — BIGCOMMERCE_STORE_HASH, BIGCOMMERCE_STOREFRONT_TOKEN,
+  // BIGCOMMERCE_CHANNEL_ID — and an AUTH_SECRET of the owner's own are
+  // Worker secrets the deploy sets from the product's Orun secrets
+  // (component.yaml); until the store's are set the storefront says
+  // "Connect your BigCommerce store".
+  "vars": {
+    "AUTH_TRUST_HOST": "true",
+  },
+
+  // The Next.js incremental cache — pre-rendered pages and every cached
+  // BigCommerce response — in the bucket infra/terraform/cloudflare-r2
+  // provisions.
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "@@wiring(cloudflare-r2/__ENV__:r2_bucket_name)@@",
+    },
+  ],
+  // The storefront's route, store-status and locale lookups (lib/kv's
+  // Cloudflare adapter) and the auth key generated when no AUTH_SECRET is
+  // set, in the namespace infra/terraform/cloudflare-kv provisions.
+  "kv_namespaces": [
+    {
+      "binding": "CATALYST_ROUTES_KV",
+      "id": "@@wiring(cloudflare-kv/__ENV__:app_kv_id)@@",
+    },
+  ],
+  // The tag cache (which tags `revalidateTag` invalidated, and when) and the
+  // revalidation queue: Durable Objects the generated Worker exports, created
+  // by the migration on first deploy.
+  "durable_objects": {
+    "bindings": [
+      { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" },
+      {
+        "name": "NEXT_TAG_CACHE_DO_SHARDED",
+        "class_name": "DOShardedTagCache",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"],
+    },
+  ],
+  // The queue revalidates a stale route by requesting it from the Worker
+  // itself.
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "catalyst-commerce-web-__ENV__" },
+  ],
+}

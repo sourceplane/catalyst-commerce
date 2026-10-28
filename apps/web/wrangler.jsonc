@@ -1,0 +1,67 @@
+// GENERATED from wrangler.template.jsonc by tooling/wire — edit the
+// template, not this file. The committed copy is the fixture render
+// (`pnpm run wire:fixture`); every Orun lane renders its own environment.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "catalyst-commerce-web-stage",
+  // OpenNext's Worker, wrapped to hand Auth.js its signing key (worker.ts).
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "observability": { "enabled": true },
+  // Auth.js takes each request's own host for its URLs (Vercel sets this for
+  // it). The store — BIGCOMMERCE_STORE_HASH, BIGCOMMERCE_STOREFRONT_TOKEN,
+  // BIGCOMMERCE_CHANNEL_ID — and an AUTH_SECRET of the owner's own are
+  // Worker secrets the deploy sets from the product's Orun secrets
+  // (component.yaml); until the store's are set the storefront says
+  // "Connect your BigCommerce store".
+  "vars": {
+    "AUTH_TRUST_HOST": "true",
+  },
+
+  // The Next.js incremental cache — pre-rendered pages and every cached
+  // BigCommerce response — in the bucket infra/terraform/cloudflare-r2
+  // provisions.
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "stg-catalyst-commerce-stage",
+    },
+  ],
+  // The storefront's route, store-status and locale lookups (lib/kv's
+  // Cloudflare adapter) and the auth key generated when no AUTH_SECRET is
+  // set, in the namespace infra/terraform/cloudflare-kv provisions.
+  "kv_namespaces": [
+    {
+      "binding": "CATALYST_ROUTES_KV",
+      "id": "00000000000000000000000000000001",
+    },
+  ],
+  // The tag cache (which tags `revalidateTag` invalidated, and when) and the
+  // revalidation queue: Durable Objects the generated Worker exports, created
+  // by the migration on first deploy.
+  "durable_objects": {
+    "bindings": [
+      { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" },
+      {
+        "name": "NEXT_TAG_CACHE_DO_SHARDED",
+        "class_name": "DOShardedTagCache",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"],
+    },
+  ],
+  // The queue revalidates a stale route by requesting it from the Worker
+  // itself.
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "catalyst-commerce-web-stage" },
+  ],
+}

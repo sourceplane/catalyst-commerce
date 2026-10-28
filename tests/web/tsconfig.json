@@ -1,0 +1,21 @@
+{
+  // The storefront's own compiler options (apps/web/tsconfig.json), because
+  // these tests import its sources and tsc checks every file it reaches under
+  // the importing project's options; only the paths and the files differ.
+  "extends": "../../apps/web/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "types": ["node"],
+    "paths": {
+      "@/vibes/*": ["../../apps/web/vibes/*"],
+      "~/*": ["../../apps/web/*"]
+    },
+    "plugins": []
+  },
+  // The storefront's augmentation of next-auth's User, which the proxies it
+  // imports rely on wherever tsc reaches them.
+  "include": ["src/**/*.ts", "../../apps/web/cloudflare-env.d.ts", "../../apps/web/next-env.d.ts",
+              "../../apps/web/auth/types.ts"],
+  "exclude": ["node_modules"]
+}
