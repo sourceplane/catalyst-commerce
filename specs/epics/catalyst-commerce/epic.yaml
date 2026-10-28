@@ -1,0 +1,29 @@
+# The epic's declaration. metadata.name equals the directory name; metadata.key
+# is the task-key prefix this epic reserves (CA → CA-1, CA-2, …). Owner, target
+# date and health are the platform's — never written here.
+apiVersion: orun.io/v1
+kind: Epic
+metadata:
+  name: catalyst-commerce
+  key: CA
+spec:
+  title: "BigCommerce's Catalyst storefront on Cloudflare Workers"
+  summary: "BigCommerce's Catalyst (Vercel's Catalyst by BigCommerce) — home, categories, brands, faceted search, product pages, a cart, BigCommerce's checkout, accounts, wish lists, a blog — runs as one Cloudflare Worker with Static Assets, its BigCommerce reads in Next's data cache in R2 with the tag cache and revalidation queue in Durable Objects and its route lookups in KV, live before a store is connected, and becomes an Orun baseline that takes a new storefront from nothing to live on stage and prod in one landing."
+  state: started
+  milestones:
+    - name: "CA0 — the spec"
+      exitCriteria:
+        - "the repository is born with its intent, CI, tooling and spec index, and this doc set and the task contracts are on main"
+      tasks: [CA-1]
+    - name: "CA1 — the storefront on Workers"
+      exitCriteria:
+        - "apps/web is upstream's storefront built by OpenNext into one Worker with Static Assets, the R2 incremental cache, the Durable Object tag cache and queue, and Catalyst's own KV route cache in a namespace Terraform provisions"
+        - "the GraphQL types are generated from BigCommerce's published Storefront schema; typecheck, lint, test (upstream's suite and tests/web) and build are green with no store"
+        - "with no store connected the storefront says \"Connect your BigCommerce store\" and sends every page there, never a 500; connected, wrangler dev serves the catalogue, reuses the cache and revalidates after its window"
+      tasks: [CA-2]
+    - name: "CA2 — a baseline"
+      exitCriteria:
+        - "blueprint.yaml (the console card) and repo-blueprint.yaml (the build) take a new storefront from nothing to live on stage and prod in one landing, then record it"
+        - "a storefront built from it carries the product only, renamed throughout to its own name, repository, Worker, bucket and namespace, with Catalyst's licence intact"
+        - "Baseline CI is green: contract tests, the wiring path, generated component docs, the blueprint read by the pinned orun, the leak gate, the offline bootstrap and the end-to-end tier — the stage lane's steps in a staged tree, served as born, then connected to a stand-in BigCommerce and browsed"
+      tasks: [CA-3]

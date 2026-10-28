@@ -1,0 +1,22 @@
+apiVersion: orun.io/v1
+kind: TaskContract
+metadata:
+  name: CA-3
+  title: "catalyst-commerce becomes an Orun baseline"
+spec:
+  goal: A new BigCommerce storefront can be built from this repository — the console card, the build document, the rename, the deployment record — and every tier of Baseline CI proves it offline
+  affects:
+    - blueprint.yaml
+    - repo-blueprint.yaml
+    - .baseline
+    - BOOTSTRAP.md
+    - docs/phases
+    - ai/context
+    - hooks
+    - testing
+    - tooling
+    - .github/workflows
+  doneWhen:
+    - every tier of Baseline CI passes
+    - the card reads with the platform's own reader
+  gates: []
