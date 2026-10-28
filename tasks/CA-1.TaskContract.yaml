@@ -1,0 +1,14 @@
+apiVersion: orun.io/v1
+kind: TaskContract
+metadata:
+  name: CA-1
+  title: "The catalyst-commerce epic doc set"
+spec:
+  goal: The epic's README, design, plan, risks and status, and the three task contracts, are on main
+  affects:
+    - specs/epics/catalyst-commerce
+    - tasks
+  doneWhen:
+    - epic.yaml, the README, the design, the implementation plan, the risks and the status are on main
+    - the three task contracts are on main
+  gates: []

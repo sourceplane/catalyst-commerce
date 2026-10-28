@@ -1,0 +1,20 @@
+apiVersion: orun.io/v1
+kind: TaskContract
+metadata:
+  name: CA-2
+  title: "The storefront on Workers"
+spec:
+  goal: BigCommerce's Catalyst runs as one Cloudflare Worker with Static Assets, its BigCommerce reads cached in R2 and revalidated through the Durable Object tag cache and queue, its route lookups in KV, live before a store is connected
+  affects:
+    - apps/web
+    - packages
+    - infra/terraform/cloudflare-r2
+    - infra/terraform/cloudflare-kv
+    - tests/web
+    - pnpm-lock.yaml
+    - pnpm-workspace.yaml
+    - README.md
+  doneWhen:
+    - pnpm typecheck, lint, test and build are green with no BigCommerce store
+    - wrangler dev serves the unconnected storefront without a 500, and a connected one from cached reads revalidated after their window
+  gates: []
