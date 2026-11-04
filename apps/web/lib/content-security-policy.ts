@@ -10,7 +10,8 @@ const frameAncestors = makeswiftEnabled ? makeswiftBaseUrl : 'none';
 // live Preview tab shows the dev server in a frame and its gateway can only
 // add to a page's frame-ancestors, never loosen them. `next build` runs with
 // NODE_ENV=production, so the deployed storefront keeps the directive.
-const framing = process.env.NODE_ENV === 'development' ? {} : { frameAncestors: [frameAncestors] };
+const framing: Record<string, string[]> =
+  process.env.NODE_ENV === 'development' ? {} : { frameAncestors: [frameAncestors] };
 
 // customize the directives as needed
 export const cspHeader = builder({
