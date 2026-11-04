@@ -82,6 +82,37 @@ spec:
           - profile: deploy
             when:
               triggerRef: github-push-main
+  # How the site runs itself for orun.work's live Preview tab
+  # (saas-parallel-baselining PB4): `orun preview` starts this, and a coding
+  # session keeps it running while it works, so the person watches it change
+  # as it is built. The dev server binds the box's loopback only, on a fixed
+  # port, and installs first, so a checkout the session has not installed yet
+  # still comes up.
+  # Before it starts, it builds the one workspace package the site imports
+  # (packages/client, whose dist/ `next dev` loads) and writes the GraphQL
+  # types from the committed schema (scripts/generate.cjs, as `pnpm dev`
+  # does; offline). The proxies build their matchers with URLPattern, a
+  # global from Node 24 on: on an older Node `next dev` preloads the site's
+  # own urlpattern-polyfill (a devDependency, the one its tests load), which
+  # fills it in only where it is missing. It binds `localhost`, which
+  # --dns-result-order=ipv4first resolves to 127.0.0.1 alone: the proxy's
+  # rewrites (/ to the connect page, the locale and channel routes) stay
+  # in-process only when the dev server's own URL says localhost, as Next
+  # normalizes 127.0.0.1 in a request's URL to localhost and would proxy a
+  # rewrite to a host it took for another one. With no BigCommerce store
+  # connected (the preview is given none of its secrets), / is the
+  # storefront's "connect your store" page and every other page redirects
+  # there, as a fresh deploy's do.
+  preview:
+    run:
+      - sh
+      - -c
+      - pnpm install --frozen-lockfile --prefer-offline --filter "@app/web..." && (cd ../../packages/client && exec node_modules/.bin/tsup) && node scripts/generate.cjs && exec env NODE_OPTIONS="$NODE_OPTIONS --import urlpattern-polyfill" node_modules/.bin/next dev -H localhost -p 3000
+    port: 3000
+    path: /
+    env:
+      NODE_OPTIONS: --max-old-space-size=1024 --dns-result-order=ipv4first
+      NEXT_TELEMETRY_DISABLED: "1"
   parameters:
     nodeVersion: "22"
     pnpmVersion: "10.12.1"

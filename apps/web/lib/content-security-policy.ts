@@ -6,11 +6,18 @@ const makeswiftBaseUrl = process.env.MAKESWIFT_BASE_URL || 'https://app.makeswif
 
 const frameAncestors = makeswiftEnabled ? makeswiftBaseUrl : 'none';
 
+// Dev server only: `next dev` sends no frame-ancestors, because orun.work's
+// live Preview tab shows the dev server in a frame and its gateway can only
+// add to a page's frame-ancestors, never loosen them. `next build` runs with
+// NODE_ENV=production, so the deployed storefront keeps the directive.
+const framing: Record<string, string[]> =
+  process.env.NODE_ENV === 'development' ? {} : { frameAncestors: [frameAncestors] };
+
 // customize the directives as needed
 export const cspHeader = builder({
   directives: {
     baseUri: ['self'],
-    frameAncestors: [frameAncestors],
+    ...framing,
     // formAction: ['self'],
     // defaultSrc: ['self'],
     // scriptSrc: ['self'],
